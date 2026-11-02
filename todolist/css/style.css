@@ -1,0 +1,498 @@
+/* ---------- 테마 변수 ---------- */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #e3e6eb;
+  --text: #1b1f24;
+  --text-muted: #5f6672;
+  --accent: #3b5bdb;
+  --accent-contrast: #ffffff;
+  --danger: #c92a2a;
+  --success: #2b8a3e;
+  --warning-bg: #fff3bf;
+  --warning-text: #5c4400;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 16px rgba(16, 24, 40, 0.06);
+  --radius: 12px;
+  --font: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121417;
+    --surface: #1b1e23;
+    --surface-2: #24282e;
+    --border: #2f343b;
+    --text: #e8eaed;
+    --text-muted: #9aa1ab;
+    --accent: #7c95ff;
+    --accent-contrast: #0b0d12;
+    --danger: #ff8787;
+    --success: #69db7c;
+    --warning-bg: #3d3000;
+    --warning-text: #ffe066;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121417;
+  --surface: #1b1e23;
+  --surface-2: #24282e;
+  --border: #2f343b;
+  --text: #e8eaed;
+  --text-muted: #9aa1ab;
+  --accent: #7c95ff;
+  --accent-contrast: #0b0d12;
+  --danger: #ff8787;
+  --success: #69db7c;
+  --warning-bg: #3d3000;
+  --warning-text: #ffe066;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+/* ---------- 기본 ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] { display: none !important; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- 레이아웃 ---------- */
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 16px 120px;
+}
+
+.banner {
+  padding: 10px 16px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  text-align: center;
+  font-size: 14px;
+}
+
+/* ---------- 헤더 ---------- */
+.header { margin-bottom: 24px; }
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.date {
+  margin: 4px 0 16px;
+  color: var(--text-muted);
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 200ms ease, background-color 200ms ease;
+}
+
+.progress-fill.full { background: var(--success); }
+
+.progress-text {
+  min-width: 72px;
+  text-align: right;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.celebrate {
+  margin: 12px 0 0;
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* ---------- 버튼 / 입력 ---------- */
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.btn:hover { background: var(--surface-2); }
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.btn-primary:hover { background: var(--accent); opacity: 0.9; }
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost:disabled:hover { background: transparent; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn-danger:hover { color: var(--danger); }
+
+#theme-toggle .icon { display: none; }
+#theme-toggle[data-mode="system"] .icon-system,
+#theme-toggle[data-mode="light"] .icon-light,
+#theme-toggle[data-mode="dark"] .icon-dark { display: block; }
+
+.input,
+.select,
+.edit-input {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.input::placeholder { color: var(--text-muted); }
+
+.input:focus,
+.select:focus,
+.edit-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* ---------- 날짜 이월 ---------- */
+.rollover {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.rollover p { margin: 0 0 12px; }
+
+.rollover-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- 추가 폼 ---------- */
+.add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.add-form .input { flex: 1 1 240px; min-width: 0; }
+
+.add-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.char-count {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.char-count.limit { color: var(--danger); }
+
+/* ---------- 필터 ---------- */
+.filters {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.filter {
+  flex: 1;
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.filter[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.filter .count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+/* ---------- 할일 목록 ---------- */
+.todo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.todo-list:empty { display: none; }
+
+.todo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.todo:last-child { border-bottom: 0; }
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 44px;
+  flex: none;
+  color: var(--text-muted);
+  opacity: 0.5;
+  cursor: grab;
+  touch-action: none;
+}
+
+.drag-handle .icon { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+.todo:hover .drag-handle { opacity: 1; }
+
+.todo.dragging { opacity: 0.4; }
+.todo.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.todo.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+
+.todo-check {
+  width: 22px;
+  height: 22px;
+  margin: 11px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: color 150ms ease;
+}
+
+.edit-input { flex: 1; min-width: 0; }
+
+.todo.completed .todo-text {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-high {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.badge-medium {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.badge-low {
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.todo.completed .badge { display: none; }
+
+.empty {
+  margin: 0;
+  padding: 48px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---------- 푸터 ---------- */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 토스트 ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow);
+  animation: toast-in 200ms ease;
+}
+
+.toast-undo {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------- 모바일 ---------- */
+@media (max-width: 480px) {
+  .app { padding-top: 24px; }
+  h1 { font-size: 24px; }
+  .add-controls { flex: 1 1 100%; }
+  .add-controls .select { flex: 1; }
+  .add-controls .btn { flex: 1; }
+  .hint { display: none; }
+  .footer { justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
