@@ -38,6 +38,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let client: NeonQueryFunction<false, false> | undefined;
 let ready: Promise<void> | undefined;
 
+/** 연결 문자열이 설정되어 있는지 확인합니다. 없으면 화면에 설정 안내를 보여 줍니다. */
+export function isDatabaseConfigured() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 function sql() {
   if (!client) {
     const url = process.env.DATABASE_URL;

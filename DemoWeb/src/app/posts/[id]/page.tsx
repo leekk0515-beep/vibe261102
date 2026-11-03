@@ -17,12 +17,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getPost } from "@/lib/db";
+import { getPost, isDatabaseConfigured } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 
 export async function generateMetadata({
   params,
 }: PageProps<"/posts/[id]">): Promise<Metadata> {
+  if (!isDatabaseConfigured()) return {};
   const { id } = await params;
   const data = await getPost(id);
   return { title: data?.post.title ?? "게시글을 찾을 수 없음" };

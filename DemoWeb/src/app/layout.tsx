@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { DatabaseNotice } from "@/components/database-notice";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { isDatabaseConfigured } from "@/lib/db";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -40,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           <SiteHeader />
           <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:py-8">
-            {children}
+            {isDatabaseConfigured() ? children : <DatabaseNotice />}
           </main>
           <footer className="border-t py-6 text-center text-xs text-muted-foreground">
             데모 게시판 · Next.js + shadcn/ui
