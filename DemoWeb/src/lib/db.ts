@@ -1,18 +1,13 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 /**
- * 로컬 JSON 파일 저장소.
+ * Neon(PostgreSQL) 저장소.
  *
- * 외부 DB·네이티브 바이너리·마이그레이션 없이 `npm install` 직후 바로 동작하도록
- * `data/board.json` 한 파일에 게시글과 댓글을 저장합니다. 쓰기는 프로세스 내
- * 큐로 직렬화하고(최초 시드 생성 포함) 임시 파일에 쓴 뒤 rename 하여 파일이
- * 깨지지 않게 합니다.
- * 단일 서버 프로세스용 데모 저장소이며, 다중 인스턴스·대용량에는 맞지 않습니다.
+ * `DATABASE_URL`(.env.local)로 연결하며, Neon의 HTTP 드라이버를 사용해 커넥션
+ * 풀 관리 없이 요청마다 쿼리를 보냅니다. 첫 쿼리 때 테이블이 없으면 만들고,
+ * 게시글이 하나도 없으면 안내용 글을 넣습니다.
  */
 
 export type Post = {
@@ -34,79 +29,100 @@ export type Comment = {
 
 export type PostSummary = Post & { commentCount: number };
 
-type Data = { posts: Post[]; comments: Comment[] };
-
 export type SearchField = "all" | "title" | "content";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "board.json");
+type Row = Record<string, unknown>;
 
-let queue: Promise<unknown> = Promise.resolve();
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function seed(): Data {
-  const now = Date.now();
-  const posts: Post[] = [
-    {
-      title: "게시판에 오신 것을 환영합니다",
-      content:
-        "Next.js App Router와 shadcn/ui로 만든 데모 게시판입니다.\n\n글을 작성하고, 수정하고, 삭제하고, 댓글을 남겨 보세요.",
-      author: "관리자",
-    },
-    {
-      title: "검색 기능 사용법",
-      content:
-        "상단 검색창에서 제목, 내용 또는 제목+내용으로 게시글을 찾을 수 있습니다.",
-      author: "관리자",
-    },
-    {
-      title: "다크 모드를 지원합니다",
-      content: "우측 상단의 테마 버튼으로 라이트/다크/시스템 모드를 전환할 수 있습니다.",
-      author: "관리자",
-    },
-  ].map((p, i) => {
-    const at = new Date(now - (3 - i) * 60_000).toISOString();
-    return { ...p, id: randomUUID(), createdAt: at, updatedAt: at };
-  });
-  return { posts, comments: [] };
-}
+let client: NeonQueryFunction<false, false> | undefined;
+let ready: Promise<void> | undefined;
 
-async function load(): Promise<Data> {
-  if (!existsSync(DATA_FILE)) {
-    const data = seed();
-    await save(data);
-    return data;
+function sql() {
+  if (!client) {
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error(
+        "DATABASE_URL이 설정되지 않았습니다. DemoWeb/.env.local 에 Neon 연결 문자열을 넣어 주세요.",
+      );
+    }
+    client = neon(url);
   }
-  return JSON.parse(await readFile(DATA_FILE, "utf8")) as Data;
+  return client;
 }
 
-async function save(data: Data) {
-  await mkdir(DATA_DIR, { recursive: true });
-  const tmp = `${DATA_FILE}.${randomUUID()}.tmp`;
-  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await rename(tmp, DATA_FILE);
+/** 테이블 생성과 초기 데이터 입력을 프로세스당 한 번만 수행합니다. */
+async function db() {
+  const q = sql();
+  ready ??= q
+    .transaction([
+      // 여러 서버 프로세스가 동시에 초기화해도 시드가 한 번만 들어가게 합니다.
+      q`SELECT pg_advisory_xact_lock(724100)`,
+      q`CREATE TABLE IF NOT EXISTS posts (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          title text NOT NULL,
+          content text NOT NULL,
+          author text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )`,
+      q`CREATE INDEX IF NOT EXISTS posts_created_at_idx ON posts (created_at DESC)`,
+      q`CREATE TABLE IF NOT EXISTS comments (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          post_id uuid NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+          author text NOT NULL,
+          content text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )`,
+      q`CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments (post_id, created_at)`,
+      q`INSERT INTO posts (title, content, author, created_at, updated_at)
+        SELECT s.title, s.content, '관리자', now() - s.ago, now() - s.ago
+        FROM (VALUES
+          ('게시판에 오신 것을 환영합니다',
+           E'Next.js App Router와 shadcn/ui로 만든 데모 게시판입니다.\\n\\n글을 작성하고, 수정하고, 삭제하고, 댓글을 남겨 보세요.',
+           interval '3 minutes'),
+          ('검색 기능 사용법',
+           '상단 검색창에서 제목, 내용 또는 제목+내용으로 게시글을 찾을 수 있습니다.',
+           interval '2 minutes'),
+          ('다크 모드를 지원합니다',
+           '우측 상단의 테마 버튼으로 라이트/다크/시스템 모드를 전환할 수 있습니다.',
+           interval '1 minute')
+        ) AS s(title, content, ago)
+        WHERE NOT EXISTS (SELECT 1 FROM posts)`,
+    ])
+    .then(() => undefined)
+    .catch((err) => {
+      // 일시적인 연결 오류 뒤에 다시 시도할 수 있게 합니다.
+      ready = undefined;
+      throw err;
+    });
+  await ready;
+  return q;
 }
 
-/**
- * 모든 파일 접근을 하나의 큐로 직렬화합니다. 읽기-수정-쓰기가 서로의 변경을
- * 덮어쓰지 않고, 첫 요청들이 동시에 시드 파일을 만들다 충돌하지 않게 합니다.
- */
-function serialize<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(fn);
-  queue = run.catch(() => undefined);
-  return run;
+function iso(v: unknown) {
+  return new Date(v as string | Date).toISOString();
 }
 
-function mutate<T>(fn: (data: Data) => T): Promise<T> {
-  return serialize(async () => {
-    const data = await load();
-    const result = fn(data);
-    await save(data);
-    return result;
-  });
+function toPost(r: Row): Post {
+  return {
+    id: r.id as string,
+    title: r.title as string,
+    content: r.content as string,
+    author: r.author as string,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  };
 }
 
-function read(): Promise<Data> {
-  return serialize(load);
+function toComment(r: Row): Comment {
+  return {
+    id: r.id as string,
+    postId: r.post_id as string,
+    author: r.author as string,
+    content: r.content as string,
+    createdAt: iso(r.created_at),
+  };
 }
 
 export async function listPosts({
@@ -120,96 +136,99 @@ export async function listPosts({
   page?: number;
   pageSize?: number;
 }) {
-  const { posts, comments } = await read();
-  const q = query.trim().toLowerCase();
+  const q = await db();
+  const term = query.trim();
+  // ILIKE 패턴 문자(%, _)와 이스케이프 문자는 글자 그대로 검색합니다.
+  const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const byTitle = field !== "content";
+  const byContent = field !== "title";
+  const where = q`(${term} = ''
+    OR (${byTitle} AND title ILIKE ${pattern})
+    OR (${byContent} AND content ILIKE ${pattern}))`;
 
-  const filtered = posts
-    .filter((p) => {
-      if (!q) return true;
-      const inTitle = p.title.toLowerCase().includes(q);
-      const inContent = p.content.toLowerCase().includes(q);
-      if (field === "title") return inTitle;
-      if (field === "content") return inContent;
-      return inTitle || inContent;
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-  const total = filtered.length;
+  const [{ count }] = (await q`SELECT count(*)::int AS count FROM posts WHERE ${where}`) as {
+    count: number;
+  }[];
+  const total = count;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const current = Math.min(Math.max(1, page), totalPages);
-  const items: PostSummary[] = filtered
-    .slice((current - 1) * pageSize, current * pageSize)
-    .map((p) => ({
-      ...p,
-      commentCount: comments.filter((c) => c.postId === p.id).length,
-    }));
+
+  const rows = (await q`
+    SELECT p.*,
+      (SELECT count(*)::int FROM comments c WHERE c.post_id = p.id) AS comment_count
+    FROM posts p
+    WHERE ${where}
+    ORDER BY p.created_at DESC, p.id
+    LIMIT ${pageSize} OFFSET ${(current - 1) * pageSize}`) as Row[];
+
+  const items: PostSummary[] = rows.map((r) => ({
+    ...toPost(r),
+    commentCount: r.comment_count as number,
+  }));
 
   return { items, total, page: current, totalPages, pageSize };
 }
 
 export async function getPost(id: string) {
-  const { posts, comments } = await read();
-  const post = posts.find((p) => p.id === id);
-  if (!post) return null;
-  return {
-    post,
-    comments: comments
-      .filter((c) => c.postId === id)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-  };
+  if (!UUID.test(id)) return null;
+  const q = await db();
+  const [posts, comments] = await Promise.all([
+    q`SELECT * FROM posts WHERE id = ${id}` as Promise<Row[]>,
+    q`SELECT * FROM comments WHERE post_id = ${id} ORDER BY created_at, id` as Promise<Row[]>,
+  ]);
+  if (posts.length === 0) return null;
+  return { post: toPost(posts[0]), comments: comments.map(toComment) };
 }
 
-export function createPost(input: Pick<Post, "title" | "content" | "author">) {
-  return mutate((data) => {
-    const now = new Date().toISOString();
-    const post: Post = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
-    data.posts.push(post);
-    return post;
-  });
+export async function createPost(input: Pick<Post, "title" | "content" | "author">) {
+  const q = await db();
+  const rows = (await q`
+    INSERT INTO posts (title, content, author)
+    VALUES (${input.title}, ${input.content}, ${input.author})
+    RETURNING *`) as Row[];
+  return toPost(rows[0]);
 }
 
-export function updatePost(
+export async function updatePost(
   id: string,
   input: Pick<Post, "title" | "content" | "author">,
 ) {
-  return mutate((data) => {
-    const post = data.posts.find((p) => p.id === id);
-    if (!post) return null;
-    Object.assign(post, input, { updatedAt: new Date().toISOString() });
-    return post;
-  });
+  if (!UUID.test(id)) return null;
+  const q = await db();
+  const rows = (await q`
+    UPDATE posts
+    SET title = ${input.title}, content = ${input.content},
+        author = ${input.author}, updated_at = now()
+    WHERE id = ${id}
+    RETURNING *`) as Row[];
+  return rows[0] ? toPost(rows[0]) : null;
 }
 
-export function deletePost(id: string) {
-  return mutate((data) => {
-    const before = data.posts.length;
-    data.posts = data.posts.filter((p) => p.id !== id);
-    data.comments = data.comments.filter((c) => c.postId !== id);
-    return data.posts.length < before;
-  });
+/** 댓글은 외래 키의 ON DELETE CASCADE로 함께 삭제됩니다. */
+export async function deletePost(id: string) {
+  if (!UUID.test(id)) return false;
+  const q = await db();
+  const rows = (await q`DELETE FROM posts WHERE id = ${id} RETURNING id`) as Row[];
+  return rows.length > 0;
 }
 
-export function addComment(
+export async function addComment(
   postId: string,
   input: Pick<Comment, "author" | "content">,
 ) {
-  return mutate((data) => {
-    if (!data.posts.some((p) => p.id === postId)) return null;
-    const comment: Comment = {
-      ...input,
-      id: randomUUID(),
-      postId,
-      createdAt: new Date().toISOString(),
-    };
-    data.comments.push(comment);
-    return comment;
-  });
+  if (!UUID.test(postId)) return null;
+  const q = await db();
+  // 게시글이 없으면 아무것도 넣지 않고 null을 돌려줍니다.
+  const rows = (await q`
+    INSERT INTO comments (post_id, author, content)
+    SELECT id, ${input.author}, ${input.content} FROM posts WHERE id = ${postId}
+    RETURNING *`) as Row[];
+  return rows[0] ? toComment(rows[0]) : null;
 }
 
-export function deleteComment(id: string) {
-  return mutate((data) => {
-    const before = data.comments.length;
-    data.comments = data.comments.filter((c) => c.id !== id);
-    return data.comments.length < before;
-  });
+export async function deleteComment(id: string) {
+  if (!UUID.test(id)) return false;
+  const q = await db();
+  const rows = (await q`DELETE FROM comments WHERE id = ${id} RETURNING id`) as Row[];
+  return rows.length > 0;
 }
