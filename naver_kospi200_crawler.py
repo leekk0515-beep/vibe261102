@@ -88,14 +88,21 @@ def fetch_daily_prices(days=20):
     return rows[:days]
 
 
-def fetch_constituents(max_items=KOSPI200_COUNT):
-    """코스피200 구성 종목을 페이지 단위로 넘기며 max_items개까지 수집 (시가총액 순)"""
+def print_page(page, count):
+    print(f"  {page}페이지: {count}건")
+
+
+def fetch_constituents(max_items=KOSPI200_COUNT, on_page=print_page):
+    """코스피200 구성 종목을 페이지 단위로 넘기며 max_items개까지 수집 (시가총액 순)
+
+    on_page(page, count)는 페이지를 하나 받을 때마다 호출됩니다. (GUI 진행 표시용)
+    """
     rows = []
     seen = set()
     page = 1
     while len(rows) < max_items:
         items = get_json(f"{API_BASE}/enrollStocks", {"page": page, "pageSize": PAGE_SIZE})
-        print(f"  {page}페이지: {len(items)}건")
+        on_page(page, len(items))
         if not items:
             break
         for it in items:
