@@ -7,6 +7,9 @@ Next.js(App Router) + TypeScript + shadcn/ui로 만든 웹 게시판입니다.
 - 게시글 목록(페이지당 10개, 페이지네이션), 상세, 작성, 수정, 삭제
 - 댓글 작성/목록/삭제
 - 제목 · 내용 · 제목+내용 검색
+- 카테고리(공지 · 자유 · 질문 · 정보) 지정과 탭 필터
+- 조회수(같은 탭 세션에서 한 번만 집계)와 좋아요(브라우저별로 누르기/취소)
+- 정렬: 최신순 · 조회순 · 좋아요순 · 댓글 많은 순
 - 반응형 레이아웃, 라이트/다크/시스템 테마 전환
 - 한국어 UI, 입력값 검증 메시지
 
@@ -36,7 +39,7 @@ npm start
 [Neon](https://neon.tech)(서버리스 PostgreSQL)에 저장합니다. 연결 문자열은 `.env.local`의 `DATABASE_URL`에서 읽으며, 이 파일은 `.gitignore`에 포함되어 커밋되지 않습니다(`.env.example`만 커밋).
 
 - 드라이버: `@neondatabase/serverless`의 HTTP 쿼리 함수(`neon()`). 커넥션 풀 관리가 필요 없고 서버리스 배포에도 그대로 쓸 수 있습니다.
-- 스키마: 별도 마이그레이션 단계 없이, 서버가 처음 쿼리할 때 `posts`, `comments` 테이블과 인덱스를 `CREATE TABLE IF NOT EXISTS`로 만듭니다. 게시글이 하나도 없으면 안내용 글 3개를 넣습니다. 여러 프로세스가 동시에 시작해도 advisory lock으로 한 번만 실행됩니다.
+- 스키마: 별도 마이그레이션 단계 없이, 서버가 처음 쿼리할 때 `posts`, `comments` 테이블과 인덱스를 `CREATE TABLE IF NOT EXISTS`로 만들고, 기존 테이블에는 `category`, `view_count`, `like_count` 열을 `ADD COLUMN IF NOT EXISTS`로 추가합니다(기존 글은 '자유'). 게시글이 하나도 없으면 안내용 글 3개를 넣습니다. 여러 프로세스가 동시에 시작해도 advisory lock으로 한 번만 실행됩니다.
 - 댓글은 `post_id` 외래 키(`ON DELETE CASCADE`)로 묶여 있어 게시글을 지우면 함께 삭제됩니다.
 - 검색은 `ILIKE`로 하며 `%`, `_`는 글자 그대로 검색되도록 이스케이프합니다.
 

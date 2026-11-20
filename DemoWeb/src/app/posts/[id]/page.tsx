@@ -7,6 +7,8 @@ import { ArrowLeftIcon, PencilIcon } from "lucide-react";
 import { CommentForm } from "@/components/comment-form";
 import { DeleteCommentButton } from "@/components/delete-comment-button";
 import { DeletePostButton } from "@/components/delete-post-button";
+import { LikeButton, ViewCount } from "@/components/post-stats";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { categoryLabel } from "@/lib/board";
 import { getPost, isDatabaseConfigured } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
 
@@ -58,6 +61,11 @@ async function PostDetail({ params }: { params: Promise<{ id: string }> }) {
     <>
       <Card>
         <CardHeader>
+          <div>
+            <Badge variant={post.category === "notice" ? "default" : "secondary"} asChild>
+              <Link href={`/?category=${post.category}`}>{categoryLabel(post.category)}</Link>
+            </Badge>
+          </div>
           <CardTitle className="text-xl leading-snug break-words sm:text-2xl">
             {post.title}
           </CardTitle>
@@ -65,6 +73,7 @@ async function PostDetail({ params }: { params: Promise<{ id: string }> }) {
             <span className="font-medium text-foreground">{post.author}</span>
             <span>{formatDateTime(post.createdAt)}</span>
             {edited && <span>(수정됨 {formatDateTime(post.updatedAt)})</span>}
+            <ViewCount postId={post.id} initial={post.viewCount} />
           </CardDescription>
         </CardHeader>
         <Separator />
@@ -73,7 +82,9 @@ async function PostDetail({ params }: { params: Promise<{ id: string }> }) {
             {post.content}
           </div>
         </CardContent>
-        <CardFooter className="justify-end gap-2">
+        <CardFooter className="gap-2">
+          <LikeButton postId={post.id} initial={post.likeCount} />
+          <span className="flex-1" />
           <Button variant="outline" size="sm" asChild>
             <Link href={`/posts/${post.id}/edit`}>
               <PencilIcon data-icon="inline-start" />

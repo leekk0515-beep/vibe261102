@@ -1,0 +1,8 @@
+# PyInstaller 빌드 결과물
+build/
+dist/
+.venv-build/
+.venv-build-sp500/
+.venv-build-birth/
+*.spec
+__pycache__/

@@ -22,7 +22,7 @@ async function EditForm({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getPost(id);
   if (!data) notFound();
-  const { title, content, author } = data.post;
+  const { title, content, author, category } = data.post;
 
   return (
     <PostForm
@@ -30,7 +30,7 @@ async function EditForm({ params }: { params: Promise<{ id: string }> }) {
       submitLabel="수정 완료"
       cancelHref={`/posts/${id}`}
       action={updatePostAction.bind(null, id)}
-      defaultValues={{ title, content, author }}
+      defaultValues={{ title, content, author, category }}
     />
   );
 }

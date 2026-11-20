@@ -1,0 +1,889 @@
+<title>Ni 나노입자 AI 합성</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: lab-notebook tool — status strip, AI recommendations, recipe + process, predictor, experiment log. Nickel-sulfate green accent, orange for the 40 nm target. */
+:root {
+  --bg: #f3f6f4;
+  --surface: #ffffff;
+  --surface-2: #eaf0ec;
+  --fg: #16201b;
+  --muted: #56665d;
+  --line: #d3ddd7;
+  --accent: #1d7656;
+  --accent-ink: #ffffff;
+  --accent-soft: #d9eee4;
+  --target: #c2560c;
+  --target-soft: rgba(194, 86, 12, 0.13);
+  --ok: #15803d;
+  --ok-soft: #dcf2e3;
+  --warn: #a15c07;
+  --warn-soft: #fbedd4;
+  --danger: #b42318;
+  --virtual: #8b9a92;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1311; --surface: #151c19; --surface-2: #1b2521; --fg: #e3ebe6; --muted: #98a9a0;
+    --line: #2a3631; --accent: #4cc497; --accent-ink: #06140e; --accent-soft: #173a2d;
+    --target: #fb923c; --target-soft: rgba(251, 146, 60, 0.16); --ok: #4ade80; --ok-soft: #133523;
+    --warn: #fbbf24; --warn-soft: #3a2c0c; --danger: #f87171; --virtual: #6d7d75;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1311; --surface: #151c19; --surface-2: #1b2521; --fg: #e3ebe6; --muted: #98a9a0;
+  --line: #2a3631; --accent: #4cc497; --accent-ink: #06140e; --accent-soft: #173a2d;
+  --target: #fb923c; --target-soft: rgba(251, 146, 60, 0.16); --ok: #4ade80; --ok-soft: #133523;
+  --warn: #fbbf24; --warn-soft: #3a2c0c; --danger: #f87171; --virtual: #6d7d75;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 28px;
+}
+h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem); font-weight: 700; }
+h2 { font-size: 1.15rem; font-weight: 700; }
+h3 { font-size: 0.98rem; font-weight: 600; }
+p { margin: 0; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 0.74rem; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+.small { font-size: 0.85rem; }
+
+/* header */
+header.top { display: grid; gap: 10px; }
+.formula { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+.formula b { color: var(--accent); font-weight: 600; }
+
+/* status strip */
+.strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.stat { padding: 14px 16px; display: grid; gap: 2px; min-width: 0; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat .v { font-family: var(--font-mono); font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .v small { font-size: 0.8rem; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; width: fit-content; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.idle { background: var(--surface-2); color: var(--muted); }
+
+/* sections */
+section { display: grid; gap: 14px; min-width: 0; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px; }
+.sec-head > div:first-child { display: grid; gap: 2px; min-width: 0; flex: 1 1 320px; }
+.sec-head > .row { align-items: end; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.notice { font-size: 0.85rem; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--fg); }
+.notice[hidden] { display: none; }
+
+/* controls */
+button, input, select { font: inherit; color: inherit; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 500; font-size: 0.9rem; white-space: nowrap; }
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.danger { color: var(--danger); }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 0.82rem; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+.input { height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); width: 100%; min-width: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* recommendation cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.card .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.kind { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); }
+.kind.ei { background: var(--accent-soft); color: var(--accent); }
+.kind.final { background: var(--target-soft); color: var(--target); }
+.pred { display: grid; gap: 0; }
+.pred .big { font-family: var(--font-mono); font-size: 1.9rem; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.pred .big small { font-size: 0.9rem; color: var(--muted); font-weight: 400; }
+.ratios { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 0.83rem; }
+.ratios div { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
+.ratios span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+table.amt { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+table.amt td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+table.amt td:last-child { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.amt tr:last-child td { border-bottom: 0; }
+.card .act { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; border-top: 1px solid var(--line); padding-top: 12px; }
+.card .act .row { grid-column: 1 / -1; }
+details summary { cursor: pointer; font-size: 0.85rem; color: var(--accent); font-weight: 500; }
+ol.steps { margin: 8px 0 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: 0.84rem; }
+.empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: 22px; text-align: center; color: var(--muted); font-size: 0.9rem; display: grid; gap: 10px; justify-items: center; }
+
+/* recipe + process */
+.two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 14px; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.timeline li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.timeline li:last-child { border-bottom: 0; }
+.timeline .t { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); padding-top: 2px; }
+.timeline .what { display: grid; gap: 2px; }
+.timeline .what b { font-weight: 600; font-size: 0.92rem; }
+.timeline .what span { font-size: 0.82rem; color: var(--muted); }
+.rpm { font-family: var(--font-mono); color: var(--accent); font-weight: 600; }
+
+/* predictor */
+.predictor { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 14px; }
+.slider { display: grid; gap: 4px; }
+.slider .lab { display: flex; justify-content: space-between; font-size: 0.84rem; }
+.slider .lab output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.readout { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 2px; }
+.readout .big { font-family: var(--font-mono); font-size: 1.8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pd { display: grid; gap: 4px; min-width: 0; }
+.pd canvas, .hist canvas { width: 100%; display: block; }
+.pd .cap { font-size: 0.78rem; color: var(--muted); }
+
+/* log */
+.hist { display: grid; gap: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table.log { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 720px; }
+table.log th, table.log td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.log th { font-size: 0.75rem; color: var(--muted); font-weight: 600; background: var(--surface-2); position: sticky; top: 0; }
+table.log td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+table.log td.l, table.log th.l { text-align: left; font-family: var(--font-body); }
+table.log tr.hit td { background: var(--ok-soft); }
+table.log tr:last-child td { border-bottom: 0; }
+.src { font-family: var(--font-body); font-size: 0.75rem; padding: 1px 7px; border-radius: 5px; background: var(--surface-2); color: var(--muted); }
+.src.real { background: var(--accent-soft); color: var(--accent); }
+.addform { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)) auto; gap: 8px; align-items: end; }
+.log-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; justify-content: space-between; }
+.progress { font-size: 0.85rem; color: var(--muted); font-family: var(--font-mono); }
+
+footer { font-size: 0.8rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 4px; }
+
+@media (max-width: 900px) {
+  .two, .predictor { grid-template-columns: minmax(0, 1fr); }
+  .addform { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .addform .btn { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat:nth-child(3) { border-left: 0; }
+  .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .pd-grid { grid-template-columns: minmax(0, 1fr); }
+  .addform { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">회분식 반응기 · 상온 화학 환원</span>
+    <h1>Ni 나노입자 AI 합성</h1>
+    <p class="formula">2Ni²⁺ + N₂H₄ + 4OH⁻ → 2Ni⁰ + N₂↑ + 4H₂O &nbsp;·&nbsp; <span style="font-family:var(--font-body)">목표 평균 입경</span> <b>40 ± 2 nm</b></p>
+  </header>
+
+  <div class="strip" aria-label="현재 상태">
+    <div class="stat"><span class="eyebrow">실험 수</span><span class="v" id="st-n">0</span><span class="small muted" id="st-n-sub">실측 0 · 가상 0</span></div>
+    <div class="stat"><span class="eyebrow">40 nm 최근접</span><span class="v" id="st-best">–</span><span class="small muted" id="st-best-sub">기록 없음</span></div>
+    <div class="stat"><span class="eyebrow">최소 오차</span><span class="v" id="st-err">–</span><span class="small muted">|d − 40 nm|</span></div>
+    <div class="stat"><span class="eyebrow">상태</span><span id="st-chip" class="chip idle">데이터 대기</span><span class="small muted" id="st-model">모델: 데이터 3건 이상 필요</span></div>
+  </div>
+
+  <p class="notice" id="store-note" hidden></p>
+
+  <section aria-labelledby="h-rec">
+    <div class="sec-head">
+      <div>
+        <h2 id="h-rec">다음 실험 추천</h2>
+        <p class="small muted">가우시안 프로세스가 입경을 예측하고, 40 nm에 가장 빨리 다가갈 조건을 기대 개선(EI)으로 고릅니다.</p>
+      </div>
+      <div class="row">
+        <div class="field" style="width:120px">
+          <label for="water">Water (mL)</label>
+          <input class="input" id="water" type="number" min="10" max="5000" step="10" value="100">
+        </div>
+        <div class="field" style="width:90px">
+          <label for="k">추천 수</label>
+          <select class="input" id="k"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option></select>
+        </div>
+        <button class="btn primary" id="btn-suggest" type="button">다음 실험 추천</button>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section aria-labelledby="h-final">
+    <div class="two">
+      <div class="panel" style="display:grid;gap:12px;align-content:start">
+        <div class="sec-head">
+          <div><h2 id="h-final">40 nm 최종 레시피</h2><p class="small muted">현재 모델에서 40 nm에 가장 가깝고 불확실성이 낮은 조건</p></div>
+        </div>
+        <div id="final"></div>
+      </div>
+      <div class="panel" style="display:grid;gap:10px;align-content:start">
+        <h2>공정 절차</h2>
+        <ol class="timeline">
+          <li><span class="t">0:00</span><div class="what"><b>NiSO₄·6H₂O + Water 투입</b><span>반응기에서 완전히 용해 · 25 °C</span></div></li>
+          <li><span class="t">0:05</span><div class="what"><b>50% NaOH Solution 투입</b><span>Ni(OH)₂ 전구체 형성</span></div></li>
+          <li><span class="t">0:05–0:35</span><div class="what"><b>교반 <span class="rpm">150 rpm</span> · 30분</b><span>균일하게 혼합</span></div></li>
+          <li><span class="t">0:35</span><div class="what"><b>NaH₂PO₂·H₂O + Hydrazine 투입</b><span>차아인산나트륨 핵생성 · 하이드라진 환원</span></div></li>
+          <li><span class="t">0:35–1:35</span><div class="what"><b>교반 <span class="rpm">150 rpm</span> · 1시간</b><span>Ni⁰ 환원 반응 · N₂ 기체 발생</span></div></li>
+          <li><span class="t">이후</span><div class="what"><b>세척 · 건조 · 입경 측정</b><span>TEM/SEM/DLS 평균 입경을 아래 기록에 입력</span></div></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-pred">
+    <div class="sec-head">
+      <div><h2 id="h-pred">입경 예측</h2><p class="small muted">조건을 움직이면 예측 입경과 95% 구간이 바뀝니다. 그래프는 나머지 조건을 고정한 채 한 변수만 바꾼 결과입니다.</p></div>
+    </div>
+    <div class="predictor">
+      <div class="panel" style="display:grid;gap:14px;align-content:start" id="sliders"></div>
+      <div class="panel"><div class="pd-grid" id="pd"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-log">
+    <div class="sec-head">
+      <div><h2 id="h-log">실험 기록</h2><p class="small muted">기록이 쌓일수록 추천이 정확해집니다. 초록 행은 40 ± 2 nm 안에 든 실험입니다.</p></div>
+      <div class="row">
+        <div class="field" style="width:90px">
+          <label for="demo-n">데모 횟수</label>
+          <input class="input" id="demo-n" type="number" min="1" max="40" value="12">
+        </div>
+        <button class="btn" id="btn-demo" type="button">가상 반응기로 자동 최적화</button>
+      </div>
+    </div>
+    <p class="progress" id="demo-progress" aria-live="polite"></p>
+    <div class="panel hist">
+      <div class="legend"><span><i style="background:var(--accent)"></i>실측</span><span><i style="background:var(--virtual)"></i>가상</span><span><i style="background:var(--target)"></i>목표 40 ± 2 nm</span></div>
+      <canvas id="hist" height="220" aria-label="실험 회차별 입경 그래프" role="img"></canvas>
+    </div>
+    <form class="panel addform" id="addform" autocomplete="off">
+      <div class="field"><label for="a-c">NiSO₄ (M)</label><input class="input" id="a-c" type="number" step="0.001" min="0.05" max="0.5" required></div>
+      <div class="field"><label for="a-oh">NaOH/Ni</label><input class="input" id="a-oh" type="number" step="0.01" min="2" max="8" required></div>
+      <div class="field"><label for="a-hz">N₂H₄/Ni</label><input class="input" id="a-hz" type="number" step="0.01" min="0.5" max="6" required></div>
+      <div class="field"><label for="a-p">NaH₂PO₂/Ni</label><input class="input" id="a-p" type="number" step="0.001" min="0" max="1" required></div>
+      <div class="field"><label for="a-d">측정 입경 (nm)</label><input class="input" id="a-d" type="number" step="0.1" min="0.1" required></div>
+      <div class="field"><label for="a-note">메모</label><input class="input" id="a-note" type="text" maxlength="60" style="font-family:var(--font-body)"></div>
+      <button class="btn primary" type="submit">실측 결과 추가</button>
+    </form>
+    <div class="table-wrap">
+      <table class="log">
+        <thead><tr><th>#</th><th class="l">구분</th><th>NiSO₄ (M)</th><th>NaOH/Ni</th><th>N₂H₄/Ni</th><th>NaH₂PO₂/Ni</th><th>입경 (nm)</th><th>오차</th><th class="l">메모</th><th class="l">일시</th><th></th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>가상 반응기는 핵생성·성장(LaMer) 경향을 흉내 낸 데모용 경험식입니다. 추천 투입량은 실측 입경이 쌓인 뒤에야 실제 공정에 의미가 있습니다.</p>
+    <p>시약 가정: NiSO₄·6H₂O, 50 wt% NaOH(1.525 g/mL), Hydrazine monohydrate(1.032 g/mL), NaH₂PO₂·H₂O(Sodium hypophosphite).</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------------- constants ---------------- */
+const TARGET = 40, TOL = 2;
+const VARS = [
+  { key: "c_ni", name: "NiSO₄ 농도", unit: "M", lo: 0.05, hi: 0.5, dp: 3 },
+  { key: "r_oh", name: "NaOH/Ni 몰비", unit: "", lo: 2, hi: 8, dp: 2 },
+  { key: "r_hz", name: "N₂H₄/Ni 몰비", unit: "", lo: 0.5, hi: 6, dp: 2 },
+  { key: "r_p", name: "NaH₂PO₂/Ni 몰비", unit: "", lo: 0, hi: 1, dp: 3 },
+];
+const D = VARS.length;
+const toUnit = (x) => x.map((v, i) => (v - VARS[i].lo) / (VARS[i].hi - VARS[i].lo));
+const fromUnit = (u) => u.map((v, i) => VARS[i].lo + v * (VARS[i].hi - VARS[i].lo));
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+/* ---------------- random ---------------- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rand = mulberry32((Math.random() * 2 ** 32) >>> 0);
+function randn(r = rand) {
+  let u = 0, v = 0;
+  while (u === 0) u = r();
+  while (v === 0) v = r();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+const Z = Array.from({ length: 128 }, () => randn(mulberry32(7 + Math.floor(Math.random() * 1e6))));
+
+/* ---------------- reagent amounts ---------------- */
+function amounts(x, waterMl) {
+  const [c, oh, hz, p] = x;
+  const n = c * waterMl / 1000; // mol Ni
+  return [
+    ["NiSO₄·6H₂O", n * 262.85, "g"],
+    ["Water", waterMl, "mL"],
+    ["50% NaOH Solution", n * oh * 40.0 / 0.5 / 1.525, "mL"],
+    ["NaH₂PO₂·H₂O", n * p * 105.99, "g"],
+    ["Hydrazine monohydrate", n * hz * 50.06 / 1.032, "mL"],
+  ];
+}
+function steps(x, waterMl) {
+  const a = amounts(x, waterMl);
+  const f = (i, d) => a[i][1].toFixed(d) + " " + a[i][2];
+  return [
+    `반응기에 Water ${f(1, 1)}와 NiSO₄·6H₂O ${f(0, 3)}을 넣고 용해합니다.`,
+    `50% NaOH Solution ${f(2, 2)}를 넣습니다.`,
+    "150 rpm으로 30분 동안 교반합니다.",
+    `NaH₂PO₂·H₂O ${f(3, 3)}과 Hydrazine monohydrate ${f(4, 2)}를 넣습니다.`,
+    "150 rpm으로 1시간 동안 교반합니다 (상온 25 °C).",
+    "세척·건조 후 평균 입경을 측정해 기록에 입력합니다.",
+  ];
+}
+
+/* ---------------- virtual reactor ---------------- */
+function reactorTrue(x) {
+  const [c, oh, hz, p] = x;
+  const k = 0.01 * Math.pow(hz, 1.2) * Math.pow(oh / 2, 0.8) * (1 + 3 * p);
+  const conv = Math.min(1 - Math.exp(-k * 60), (hz + 0.5 * p) / 0.5, 1);
+  const nuclei = Math.pow(k, 1.5) * (1 + 8 * p) * Math.sqrt(c);
+  let d = 30.8 * Math.cbrt(c * conv / nuclei);
+  d *= 1 + 0.8 * Math.max(0, c - 0.3);
+  return d;
+}
+const reactorRun = (x) => reactorTrue(x) * Math.exp(0.06 * randn());
+
+/* ---------------- gaussian process (Matérn 5/2, ARD) ---------------- */
+const S5 = Math.sqrt(5);
+function kern(a, b, ls, v) {
+  let s = 0;
+  for (let i = 0; i < D; i++) { const t = (a[i] - b[i]) / ls[i]; s += t * t; }
+  const d = Math.sqrt(s);
+  return v * (1 + S5 * d + (5 / 3) * s) * Math.exp(-S5 * d);
+}
+function cholesky(K, n) {
+  const L = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = K[i * n + j];
+      for (let k = 0; k < j; k++) s -= L[i * n + k] * L[j * n + k];
+      if (i === j) { if (s <= 0) return null; L[i * n + i] = Math.sqrt(s); }
+      else L[i * n + j] = s / L[j * n + j];
+    }
+  }
+  return L;
+}
+function fwd(L, n, b) { const x = new Float64Array(n); for (let i = 0; i < n; i++) { let s = b[i]; for (let k = 0; k < i; k++) s -= L[i * n + k] * x[k]; x[i] = s / L[i * n + i]; } return x; }
+function bwd(L, n, b) { const x = new Float64Array(n); for (let i = n - 1; i >= 0; i--) { let s = b[i]; for (let k = i + 1; k < n; k++) s -= L[k * n + i] * x[k]; x[i] = s / L[i * n + i]; } return x; }
+
+const BOUNDS = [...Array(D).fill([Math.log(0.05), Math.log(5)]), [Math.log(0.05), Math.log(10)], [Math.log(1e-4), Math.log(0.5)]];
+function buildK(X, ls, v, noise) {
+  const n = X.length, K = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) {
+    const k = kern(X[i], X[j], ls, v); K[i * n + j] = k; K[j * n + i] = k;
+  }
+  for (let i = 0; i < n; i++) K[i * n + i] += noise + 1e-8;
+  return K;
+}
+function nll(theta, X, y) {
+  const ls = theta.slice(0, D).map(Math.exp), v = Math.exp(theta[D]), noise = Math.exp(theta[D + 1]);
+  const n = X.length, L = cholesky(buildK(X, ls, v, noise), n);
+  if (!L) return 1e10;
+  const a = bwd(L, n, fwd(L, n, y));
+  let q = 0, ld = 0;
+  for (let i = 0; i < n; i++) { q += y[i] * a[i]; ld += Math.log(L[i * n + i]); }
+  return 0.5 * q + ld;
+}
+function nelderMead(f, x0, iters = 260) {
+  const n = x0.length, clip = (x) => x.map((v, i) => Math.min(BOUNDS[i][1], Math.max(BOUNDS[i][0], v)));
+  let pts = [clip(x0)];
+  for (let i = 0; i < n; i++) { const p = x0.slice(); p[i] += 0.6; pts.push(clip(p)); }
+  let vals = pts.map(f);
+  for (let it = 0; it < iters; it++) {
+    const idx = vals.map((v, i) => i).sort((a, b) => vals[a] - vals[b]);
+    pts = idx.map((i) => pts[i]); vals = idx.map((i) => vals[i]);
+    const c = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += pts[i][j] / n;
+    const worst = pts[n];
+    const xr = clip(c.map((v, j) => v + (v - worst[j]))), fr = f(xr);
+    if (fr < vals[0]) {
+      const xe = clip(c.map((v, j) => v + 2 * (v - worst[j]))), fe = f(xe);
+      if (fe < fr) { pts[n] = xe; vals[n] = fe; } else { pts[n] = xr; vals[n] = fr; }
+    } else if (fr < vals[n - 1]) { pts[n] = xr; vals[n] = fr; }
+    else {
+      const xc = clip(c.map((v, j) => v + 0.5 * (worst[j] - v))), fc = f(xc);
+      if (fc < vals[n]) { pts[n] = xc; vals[n] = fc; }
+      else for (let i = 1; i <= n; i++) { pts[i] = clip(pts[i].map((v, j) => pts[0][j] + 0.5 * (v - pts[0][j]))); vals[i] = f(pts[i]); }
+    }
+  }
+  const b = vals.indexOf(Math.min(...vals));
+  return { x: pts[b], f: vals[b] };
+}
+function fitGP(rows) {
+  const X = rows.map((r) => toUnit([r.c_ni, r.r_oh, r.r_hz, r.r_p]));
+  const ly = rows.map((r) => Math.log(r.size_nm));
+  const mean = ly.reduce((a, b) => a + b, 0) / ly.length;
+  const sd = Math.sqrt(ly.reduce((a, b) => a + (b - mean) ** 2, 0) / ly.length) || 1;
+  const y = Float64Array.from(ly, (v) => (v - mean) / sd);
+  const r = mulberry32(12345);
+  let best = null;
+  for (let s = 0; s < 5; s++) {
+    const x0 = s === 0 ? [...Array(D).fill(Math.log(0.5)), 0, Math.log(0.01)] : BOUNDS.map(([lo, hi]) => lo + r() * (hi - lo));
+    const res = nelderMead((t) => nll(t, X, y), x0);
+    if (!best || res.f < best.f) best = res;
+  }
+  const t = best.x, ls = t.slice(0, D).map(Math.exp), v = Math.exp(t[D]), noise = Math.exp(t[D + 1]);
+  const n = X.length, L = cholesky(buildK(X, ls, v, noise), n);
+  const alpha = bwd(L, n, fwd(L, n, y));
+  return {
+    n,
+    /** returns [mu, sd] of ln(size) */
+    predictU(u) {
+      const ks = new Float64Array(n);
+      for (let i = 0; i < n; i++) ks[i] = kern(u, X[i], ls, v);
+      let m = 0; for (let i = 0; i < n; i++) m += ks[i] * alpha[i];
+      const w = fwd(L, n, ks);
+      let q = 0; for (let i = 0; i < n; i++) q += w[i] * w[i];
+      return [m * sd + mean, Math.sqrt(Math.max(v - q, 1e-12)) * sd];
+    },
+  };
+}
+function predictNm(gp, x) {
+  const [m, s] = gp.predictU(toUnit(x));
+  return { med: Math.exp(m), lo: Math.exp(m - 1.96 * s), hi: Math.exp(m + 1.96 * s) };
+}
+
+/* ---------------- bayesian optimization ---------------- */
+function candidates(rows, n) {
+  const U = [];
+  for (let i = 0; i < n; i++) U.push(Array.from({ length: D }, () => rand()));
+  if (rows.length) {
+    const top = rows.slice().sort((a, b) => Math.abs(a.size_nm - TARGET) - Math.abs(b.size_nm - TARGET)).slice(0, 3);
+    for (const t of top) {
+      const u0 = toUnit([t.c_ni, t.r_oh, t.r_hz, t.r_p]);
+      for (const s of [0.03, 0.1]) for (let i = 0; i < Math.floor(n / 6); i++) U.push(u0.map((v) => clamp01(v + s * randn())));
+    }
+  }
+  return U;
+}
+function lhs(m) {
+  const cols = Array.from({ length: D }, () => {
+    const p = Array.from({ length: m }, (_, i) => (i + rand()) / m);
+    for (let i = m - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+    return p;
+  });
+  return Array.from({ length: m }, (_, i) => cols.map((c) => c[i]));
+}
+function suggest(rows, gp, k) {
+  if (rows.length < 5 || !gp) {
+    const m = Math.max(k, 5 - rows.length);
+    return lhs(m).map((u) => mk(fromUnit(u), gp, "초기설계"));
+  }
+  const best = Math.min(...rows.map((r) => Math.abs(r.size_nm - TARGET)));
+  const U = candidates(rows, 4000);
+  const ei = U.map((u) => {
+    const [m, s] = gp.predictU(u);
+    let acc = 0;
+    for (const z of Z) acc += Math.max(best - Math.abs(Math.exp(m + s * z) - TARGET), 0);
+    return acc / Z.length;
+  });
+  const order = ei.map((v, i) => i).sort((a, b) => ei[b] - ei[a]);
+  const chosen = [];
+  for (const i of order) {
+    if (chosen.every((j) => Math.hypot(...U[i].map((v, d) => v - U[j][d])) >= 0.08)) chosen.push(i);
+    if (chosen.length === k) break;
+  }
+  return chosen.map((i) => mk(fromUnit(U[i]), gp, "EI"));
+}
+function finalRecipe(rows, gp) {
+  if (!gp) return null;
+  const U = candidates(rows, 6000);
+  let bi = -1, bs = Infinity;
+  U.forEach((u, i) => {
+    const [m, s] = gp.predictU(u), med = Math.exp(m);
+    const score = Math.abs(med - TARGET) + med * s;
+    if (score < bs) { bs = score; bi = i; }
+  });
+  return mk(fromUnit(U[bi]), gp, "최종");
+}
+function mk(x, gp, kind) { return { x, kind, pred: gp ? predictNm(gp, x) : null }; }
+
+/* ---------------- store (artifact db, or this tab only) ---------------- */
+const state = { rows: [], gp: null, db: null, writable: true, sugs: [], busy: false, mode: "loading" };
+const mem = { rows: [] };
+const COL = "experiments";
+
+function normalize(id, d) {
+  const num = (v) => (typeof v === "number" && isFinite(v) ? v : NaN);
+  const r = { id, c_ni: num(d.c_ni), r_oh: num(d.r_oh), r_hz: num(d.r_hz), r_p: num(d.r_p), size_nm: num(d.size_nm),
+    source: d.source === "real" ? "real" : "virtual", note: typeof d.note === "string" ? d.note.slice(0, 80) : "",
+    createdAt: typeof d.createdAt === "string" ? d.createdAt : "" };
+  return [r.c_ni, r.r_oh, r.r_hz, r.r_p, r.size_nm].every(isFinite) && r.size_nm > 0 ? r : null;
+}
+async function addRow(x, size, source, note) {
+  const doc = { c_ni: +x[0].toFixed(5), r_oh: +x[1].toFixed(4), r_hz: +x[2].toFixed(4), r_p: +x[3].toFixed(5),
+    size_nm: +size.toFixed(2), source, note: (note || "").slice(0, 60), createdAt: new Date().toISOString() };
+  if (state.db && state.writable) {
+    try { await state.db.collection(COL).add(doc); return true; }
+    catch (e) {
+      if (e && (e.code === "invalid_argument" || e.code === "not_granted")) { state.writable = false; showNote("이 문서에 기록을 저장할 권한이 없어 이 탭에서만 계산합니다."); switchToMemory(); }
+      else if (e && e.code === "quota_exceeded") { showNote("기록 저장 공간이 가득 찼습니다. 오래된 가상 실험을 지운 뒤 다시 시도하세요."); return false; }
+      else { showNote("기록을 저장하지 못했습니다. 잠시 후 다시 시도하세요."); return false; }
+    }
+  }
+  mem.rows.push(normalize("m" + Date.now() + Math.random().toString(36).slice(2, 6), doc));
+  setRows(mem.rows.slice());
+  return true;
+}
+async function deleteRow(id) {
+  if (state.db && state.writable && !id.startsWith("m")) {
+    try { await state.db.collection(COL).doc(id).delete(); } catch { showNote("삭제하지 못했습니다. 잠시 후 다시 시도하세요."); }
+    return;
+  }
+  mem.rows = mem.rows.filter((r) => r.id !== id);
+  setRows(mem.rows.slice());
+}
+function switchToMemory() { if (state.mode !== "memory") { mem.rows = state.rows.slice(); state.mode = "memory"; } }
+function showNote(t) { const n = $("store-note"); n.textContent = t; n.hidden = !t; }
+
+function setRows(rows) {
+  state.rows = rows.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+  refit();
+}
+let fitTimer = 0;
+function refit() {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(() => {
+    state.gp = state.rows.length >= 3 ? fitGP(state.rows) : null;
+    renderAll();
+  }, 30);
+}
+
+async function connect() {
+  let db = null;
+  try { db = window.claude && typeof window.claude.use === "function" ? await window.claude.use("db") : null; } catch { db = null; }
+  if (!db) {
+    state.mode = "memory";
+    showNote("기록 저장소에 연결되지 않아 이 탭에서만 계산합니다. 새로고침하면 기록이 사라집니다.");
+    setRows([]);
+    return;
+  }
+  state.db = db; state.mode = "db";
+  const timer = setTimeout(() => showNote("기록을 아직 불러오지 못했습니다. 연결을 기다리는 중입니다."), 10000);
+  db.collection(COL).orderBy("createdAt", "asc").limit(1000).onSnapshot(
+    (snap) => {
+      if (!snap.metadata.fromCache) { clearTimeout(timer); if (state.writable) showNote(""); }
+      if (state.mode !== "db") return;
+      setRows(snap.docs.map((d) => normalize(d.id, d.data() || {})).filter(Boolean));
+    },
+    () => { clearTimeout(timer); showNote("기록 저장소 연결이 끊겨 이 탭에서만 계산합니다."); switchToMemory(); },
+  );
+}
+
+/* ---------------- rendering ---------------- */
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const fmt = (v, d) => (isFinite(v) ? v.toFixed(d) : "–");
+const water = () => { const v = parseFloat($("water").value); return isFinite(v) && v > 0 ? v : 100; };
+function token(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function renderAll() {
+  renderStatus();
+  renderCards();
+  renderFinal();
+  renderLog();
+  drawHistory();
+  renderPredictor();
+}
+
+function renderStatus() {
+  const rows = state.rows, real = rows.filter((r) => r.source === "real").length;
+  $("st-n").textContent = rows.length;
+  $("st-n-sub").textContent = `실측 ${real} · 가상 ${rows.length - real}`;
+  if (!rows.length) {
+    $("st-best").textContent = "–"; $("st-best-sub").textContent = "기록 없음"; $("st-err").textContent = "–";
+  } else {
+    const b = rows.reduce((a, r) => (Math.abs(r.size_nm - TARGET) < Math.abs(a.size_nm - TARGET) ? r : a));
+    $("st-best").innerHTML = ""; $("st-best").append(fmt(b.size_nm, 1), el("small", null, "nm"));
+    $("st-best-sub").textContent = `${rows.indexOf(b) + 1}번 실험 · ${b.source === "real" ? "실측" : "가상"}`;
+    $("st-err").innerHTML = ""; $("st-err").append(fmt(Math.abs(b.size_nm - TARGET), 2), el("small", null, "nm"));
+  }
+  const err = rows.length ? Math.min(...rows.map((r) => Math.abs(r.size_nm - TARGET))) : Infinity;
+  const chip = $("st-chip");
+  if (!rows.length) { chip.className = "chip idle"; chip.textContent = "데이터 대기"; }
+  else if (err <= TOL) { chip.className = "chip ok"; chip.textContent = "40 ± 2 nm 도달"; }
+  else { chip.className = "chip warn"; chip.textContent = "탐색 중"; }
+  $("st-model").textContent = state.gp ? `모델: 가우시안 프로세스 · ${state.gp.n}건 학습` : `모델: 데이터 ${Math.max(0, 3 - rows.length)}건 더 필요`;
+}
+
+function ratioList(x) {
+  const g = el("div", "ratios");
+  VARS.forEach((v, i) => { const d = el("div"); d.append(el("span", "muted", v.name), el("span", null, x[i].toFixed(v.dp) + (v.unit ? " " + v.unit : ""))); g.append(d); });
+  return g;
+}
+function amountTable(x) {
+  const t = el("table", "amt"), tb = el("tbody");
+  for (const [name, v, u] of amounts(x, water())) { const tr = el("tr"); tr.append(el("td", null, name), el("td", null, `${v.toFixed(u === "g" ? 3 : 2)} ${u}`)); tb.append(tr); }
+  t.append(tb); return t;
+}
+function predBlock(s) {
+  const p = el("div", "pred");
+  if (s.pred) {
+    const big = el("div", "big"); big.append(fmt(s.pred.med, 1), el("small", null, " nm 예측"));
+    p.append(big, el("span", "small muted", `95% 구간 ${fmt(s.pred.lo, 1)} – ${fmt(s.pred.hi, 1)} nm`));
+  } else {
+    p.append(el("div", "big", "—"), el("span", "small muted", "초기 실험: 예측은 데이터 3건 이후부터"));
+  }
+  return p;
+}
+function stepsDetails(x, open) {
+  const d = el("details"); if (open) d.open = true;
+  d.append(el("summary", null, "실험 절차 보기"));
+  const ol = el("ol", "steps"); steps(x, water()).forEach((s) => ol.append(el("li", null, s)));
+  d.append(ol); return d;
+}
+
+function renderCards() {
+  const box = $("cards"); box.innerHTML = "";
+  if (!state.sugs.length) {
+    const e = el("div", "empty");
+    e.append(el("p", null, state.rows.length < 5
+      ? "아직 추천이 없습니다. 첫 추천은 조건 공간을 고르게 덮는 초기 실험 5개입니다."
+      : "다음 실험 추천을 누르면 40 nm에 가장 빨리 다가갈 조건을 고릅니다."));
+    const b = el("button", "btn primary", "다음 실험 추천"); b.type = "button"; b.onclick = doSuggest;
+    e.append(b); box.append(e); return;
+  }
+  state.sugs.forEach((s, i) => {
+    const c = el("article", "card");
+    const head = el("div", "head");
+    head.append(el("h3", null, `추천 ${i + 1}`), el("span", "kind" + (s.kind === "EI" ? " ei" : ""), s.kind === "EI" ? "기대 개선(EI)" : "초기 설계"));
+    c.append(head, predBlock(s), ratioList(s.x), amountTable(s.x), stepsDetails(s.x, false));
+    const act = el("form", "act"); act.autocomplete = "off";
+    const f = el("div", "field"), id = `m-${i}`;
+    const lab = el("label", null, "측정 입경 (nm)"); lab.htmlFor = id;
+    const inp = el("input", "input"); inp.id = id; inp.type = "number"; inp.step = "0.1"; inp.min = "0.1"; inp.required = true; inp.placeholder = "예: 41.2";
+    f.append(lab, inp);
+    const save = el("button", "btn primary", "실측 저장"); save.type = "submit";
+    const row = el("div", "row");
+    const sim = el("button", "btn sm", "가상 반응기로 실험"); sim.type = "button";
+    sim.onclick = async () => { sim.disabled = true; await addRow(s.x, reactorRun(s.x), "virtual", `추천 ${i + 1} 가상`); state.sugs.splice(i, 1); renderCards(); };
+    row.append(sim);
+    act.onsubmit = async (ev) => { ev.preventDefault(); const v = parseFloat(inp.value); if (!(v > 0)) { inp.focus(); return; } save.disabled = true;
+      if (await addRow(s.x, v, "real", `추천 ${i + 1}`)) { state.sugs.splice(i, 1); renderCards(); } else save.disabled = false; };
+    act.append(f, save, row);
+    c.append(act); box.append(c);
+  });
+}
+
+function renderFinal() {
+  const box = $("final"); box.innerHTML = "";
+  const s = finalRecipe(state.rows, state.gp);
+  if (!s) { const e = el("div", "empty"); e.append(el("p", null, "실험 기록이 3건 이상 쌓이면 최종 레시피를 계산합니다.")); box.append(e); return; }
+  const top = el("div", "row"); top.style.justifyContent = "space-between"; top.style.alignItems = "start";
+  top.append(predBlock(s), el("span", "kind final", "목표 40 nm"));
+  box.append(top, ratioList(s.x), amountTable(s.x), stepsDetails(s.x, true));
+  const use = el("button", "btn sm", "이 레시피를 추천 목록에 추가"); use.type = "button";
+  use.onclick = () => { state.sugs.unshift({ ...s, kind: "EI" }); renderCards(); $("h-rec").scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const r = el("div", "row"); r.append(use); box.append(r);
+}
+
+function renderLog() {
+  const tb = $("log"); tb.innerHTML = "";
+  if (!state.rows.length) {
+    const tr = el("tr"), td = el("td", "l muted", "기록이 없습니다. 추천 실험을 하고 측정 입경을 저장하거나, 가상 반응기로 자동 최적화를 실행해 보세요.");
+    td.colSpan = 11; td.style.whiteSpace = "normal"; tr.append(td); tb.append(tr); return;
+  }
+  state.rows.forEach((r, i) => {
+    const err = Math.abs(r.size_nm - TARGET);
+    const tr = el("tr", err <= TOL ? "hit" : "");
+    const src = el("td", "l"); src.append(el("span", "src " + r.source, r.source === "real" ? "실측" : "가상"));
+    const when = r.createdAt ? new Date(r.createdAt) : null;
+    const del = el("td"); const b = el("button", "btn ghost sm danger", "삭제"); b.type = "button";
+    b.onclick = () => {
+      if (b.dataset.armed) { b.disabled = true; deleteRow(r.id); return; }
+      b.dataset.armed = "1"; b.textContent = "정말 삭제";
+      setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "삭제"; } }, 3000);
+    };
+    del.append(b);
+    tr.append(el("td", null, String(i + 1)), src, el("td", null, fmt(r.c_ni, 3)), el("td", null, fmt(r.r_oh, 2)), el("td", null, fmt(r.r_hz, 2)),
+      el("td", null, fmt(r.r_p, 3)), el("td", null, fmt(r.size_nm, 1)), el("td", null, fmt(err, 1)), el("td", "l", r.note || ""),
+      el("td", "l", when && !isNaN(when) ? when.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""), del);
+    tb.append(tr);
+  });
+}
+
+/* ---------------- charts ---------------- */
+function setupCanvas(cv, cssH) {
+  const w = cv.clientWidth || cv.parentElement.clientWidth || 300, dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(cssH * dpr); cv.style.height = cssH + "px";
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { g, w, h: cssH };
+}
+function niceLogTicks(lo, hi) {
+  const cand = [5, 10, 20, 30, 40, 50, 70, 100, 150, 200, 300, 500];
+  return cand.filter((t) => t >= lo && t <= hi);
+}
+function drawHistory() {
+  const cv = $("hist"), { g, w, h } = setupCanvas(cv, 220);
+  const fg = token("--muted"), line = token("--line"), acc = token("--accent"), vir = token("--virtual"), tgt = token("--target"), tsoft = token("--target-soft");
+  const P = { l: 44, r: 12, t: 10, b: 26 }, rows = state.rows;
+  g.clearRect(0, 0, w, h);
+  g.font = `11px ${token("--font-mono")}`;
+  const sizes = rows.map((r) => r.size_nm);
+  const lo = Math.max(3, Math.min(30, ...sizes) * 0.85), hi = Math.max(60, ...sizes) * 1.15;
+  const ly = (v) => P.t + (h - P.t - P.b) * (1 - (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)));
+  const n = Math.max(rows.length, 5);
+  const lx = (i) => P.l + (w - P.l - P.r) * (n === 1 ? 0.5 : i / (n - 1));
+  g.fillStyle = tsoft; g.fillRect(P.l, ly(TARGET + TOL), w - P.l - P.r, ly(TARGET - TOL) - ly(TARGET + TOL));
+  g.strokeStyle = line; g.lineWidth = 1; g.fillStyle = fg; g.textAlign = "right"; g.textBaseline = "middle";
+  for (const t of niceLogTicks(lo, hi)) { const y = ly(t); g.beginPath(); g.moveTo(P.l, y); g.lineTo(w - P.r, y); g.stroke(); g.fillText(String(t), P.l - 6, y); }
+  g.strokeStyle = tgt; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(P.l, ly(TARGET)); g.lineTo(w - P.r, ly(TARGET)); g.stroke(); g.setLineDash([]);
+  g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = fg;
+  const step = Math.max(1, Math.ceil(n / 12));
+  for (let i = 0; i < n; i += step) g.fillText(String(i + 1), lx(i), h - P.b + 8);
+  g.save(); g.translate(11, (h - P.b + P.t) / 2); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("입경 (nm, 로그)", 0, 0); g.restore();
+  if (!rows.length) { g.fillStyle = fg; g.textAlign = "center"; g.textBaseline = "middle"; g.font = `13px ${token("--font-body")}`; g.fillText("기록이 쌓이면 회차별 입경이 여기에 표시됩니다", (w + P.l) / 2, (h - P.b) / 2); return; }
+  g.strokeStyle = line; g.lineWidth = 1.5; g.beginPath();
+  rows.forEach((r, i) => { const x = lx(i), y = ly(r.size_nm); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  rows.forEach((r, i) => { g.fillStyle = r.source === "real" ? acc : vir; g.beginPath(); g.arc(lx(i), ly(r.size_nm), Math.abs(r.size_nm - TARGET) <= TOL ? 5.5 : 4, 0, Math.PI * 2); g.fill(); });
+}
+
+/* ---------------- predictor ---------------- */
+const cur = [0.2, 4, 2.5, 0.3];
+function buildSliders() {
+  const box = $("sliders"); box.innerHTML = "";
+  VARS.forEach((v, i) => {
+    const s = el("div", "slider"), lab = el("div", "lab"), id = "s-" + v.key;
+    const l = el("label", null, v.name + (v.unit ? ` (${v.unit})` : "")); l.htmlFor = id;
+    const out = el("output", null, cur[i].toFixed(v.dp)); out.htmlFor = id;
+    lab.append(l, out);
+    const r = el("input"); r.type = "range"; r.id = id; r.min = v.lo; r.max = v.hi; r.step = (v.hi - v.lo) / 200; r.value = cur[i];
+    r.oninput = () => { cur[i] = parseFloat(r.value); out.textContent = cur[i].toFixed(v.dp); schedulePred(); };
+    s.append(lab, r); box.append(s);
+  });
+  const ro = el("div", "readout"); ro.id = "readout"; box.append(ro);
+  const pd = $("pd"); pd.innerHTML = "";
+  VARS.forEach((v, i) => { const w = el("div", "pd"); const c = el("canvas"); c.id = "pd-" + i; c.setAttribute("role", "img"); c.setAttribute("aria-label", v.name + "에 따른 예측 입경"); w.append(el("span", "cap", v.name), c); pd.append(w); });
+}
+let predRaf = 0;
+function schedulePred() { cancelAnimationFrame(predRaf); predRaf = requestAnimationFrame(renderPredictor); }
+function renderPredictor() {
+  const ro = $("readout"); ro.innerHTML = "";
+  if (!state.gp) {
+    ro.append(el("span", "eyebrow", "예측 입경"), el("div", "big", "—"), el("span", "small muted", "실험 기록이 3건 이상 필요합니다"));
+  } else {
+    const p = predictNm(state.gp, cur);
+    const big = el("div", "big", `${fmt(p.med, 1)} nm`);
+    const near = Math.abs(p.med - TARGET) <= TOL;
+    ro.append(el("span", "eyebrow", "예측 입경"), big, el("span", "small muted", `95% 구간 ${fmt(p.lo, 1)} – ${fmt(p.hi, 1)} nm`));
+    const c = el("span", "chip " + (near ? "ok" : "idle"), near ? "목표 범위 안" : `목표와 ${fmt(Math.abs(p.med - TARGET), 1)} nm 차이`);
+    ro.append(c);
+  }
+  VARS.forEach((v, i) => drawPD(i));
+}
+function drawPD(i) {
+  const cv = $("pd-" + i); if (!cv) return;
+  const { g, w, h } = setupCanvas(cv, 150), v = VARS[i];
+  const fg = token("--muted"), line = token("--line"), acc = token("--accent"), soft = token("--accent-soft"), tgt = token("--target");
+  const P = { l: 34, r: 8, t: 6, b: 22 };
+  g.clearRect(0, 0, w, h); g.font = `10px ${token("--font-mono")}`;
+  const N = 48, xs = [], md = [], lo = [], hi = [];
+  for (let k = 0; k < N; k++) {
+    const val = v.lo + (v.hi - v.lo) * k / (N - 1); xs.push(val);
+    if (state.gp) { const x = cur.slice(); x[i] = val; const p = predictNm(state.gp, x); md.push(p.med); lo.push(p.lo); hi.push(p.hi); }
+  }
+  const yMax = state.gp ? Math.min(300, Math.max(70, ...hi.map((x) => Math.min(x, 300))) * 1.05) : 100;
+  const X = (val) => P.l + (w - P.l - P.r) * (val - v.lo) / (v.hi - v.lo);
+  const Y = (val) => P.t + (h - P.t - P.b) * (1 - Math.min(val, yMax) / yMax);
+  g.strokeStyle = line; g.lineWidth = 1; g.fillStyle = fg; g.textAlign = "right"; g.textBaseline = "middle";
+  const yt = yMax > 200 ? [0, 100, 200, 300] : yMax > 120 ? [0, 50, 100, 150] : [0, 20, 40, 60, 80, 100].filter((t) => t <= yMax);
+  for (const t of yt) { if (t > yMax) continue; const y = Y(t); g.beginPath(); g.moveTo(P.l, y); g.lineTo(w - P.r, y); g.stroke(); g.fillText(String(t), P.l - 4, y); }
+  g.textAlign = "center"; g.textBaseline = "top";
+  [v.lo, (v.lo + v.hi) / 2, v.hi].forEach((t, k) => { g.textAlign = k === 0 ? "left" : k === 2 ? "right" : "center"; g.fillText(t.toFixed(v.dp > 2 ? 2 : 1), X(t), h - P.b + 6); });
+  g.strokeStyle = tgt; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(P.l, Y(TARGET)); g.lineTo(w - P.r, Y(TARGET)); g.stroke(); g.setLineDash([]);
+  if (!state.gp) { g.fillStyle = fg; g.textAlign = "center"; g.textBaseline = "middle"; g.font = `12px ${token("--font-body")}`; g.fillText("데이터 3건 이후 표시", (w + P.l) / 2, (h - P.b) / 2); return; }
+  g.fillStyle = soft; g.beginPath();
+  xs.forEach((x, k) => (k ? g.lineTo(X(x), Y(hi[k])) : g.moveTo(X(x), Y(hi[k]))));
+  for (let k = N - 1; k >= 0; k--) g.lineTo(X(xs[k]), Y(lo[k]));
+  g.closePath(); g.fill();
+  g.strokeStyle = acc; g.lineWidth = 2; g.beginPath(); xs.forEach((x, k) => (k ? g.lineTo(X(x), Y(md[k])) : g.moveTo(X(x), Y(md[k])))); g.stroke();
+  g.strokeStyle = fg; g.lineWidth = 1; g.beginPath(); g.moveTo(X(cur[i]), P.t); g.lineTo(X(cur[i]), h - P.b); g.stroke();
+}
+
+/* ---------------- actions ---------------- */
+function doSuggest() {
+  const k = parseInt($("k").value, 10) || 3;
+  state.sugs = suggest(state.rows, state.gp, k);
+  renderCards();
+}
+async function doDemo() {
+  if (state.busy) return;
+  const N = Math.min(40, Math.max(1, parseInt($("demo-n").value, 10) || 12));
+  const btn = $("btn-demo"), prog = $("demo-progress");
+  state.busy = true; btn.disabled = true; $("btn-suggest").disabled = true;
+  let rows = state.rows.slice();
+  try {
+    for (let i = 1; i <= N; i++) {
+      const gp = rows.length >= 3 ? fitGP(rows) : null;
+      const s = suggest(rows, gp, 1)[0];
+      const size = reactorRun(s.x);
+      prog.textContent = `${i}/${N}회 · ${s.kind === "EI" ? "EI" : "초기설계"} · c=${s.x[0].toFixed(3)} NaOH=${s.x[1].toFixed(2)} N₂H₄=${s.x[2].toFixed(2)} P=${s.x[3].toFixed(3)} → ${size.toFixed(1)} nm`;
+      if (!(await addRow(s.x, size, "virtual", `자동 ${i}회`))) break;
+      rows.push({ c_ni: s.x[0], r_oh: s.x[1], r_hz: s.x[2], r_p: s.x[3], size_nm: size, source: "virtual" });
+      await new Promise((r) => setTimeout(r, 60));
+      if (s.kind === "EI" && Math.abs(size - TARGET) <= TOL) { prog.textContent += `  ✓ ${i}회 만에 40 ± 2 nm 도달`; break; }
+    }
+  } finally {
+    state.busy = false; btn.disabled = false; $("btn-suggest").disabled = false;
+  }
+}
+
+$("btn-suggest").onclick = doSuggest;
+$("btn-demo").onclick = doDemo;
+$("water").addEventListener("input", () => { try { localStorage.setItem("ni-water", $("water").value); } catch {} renderCards(); renderFinal(); });
+try { const w = localStorage.getItem("ni-water"); if (w) $("water").value = w; } catch {}
+$("addform").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const vals = ["a-c", "a-oh", "a-hz", "a-p", "a-d"].map((id) => parseFloat($(id).value));
+  const bad = vals.findIndex((v, i) => !isFinite(v) || (i < 4 ? v < VARS[i].lo || v > VARS[i].hi : v <= 0));
+  if (bad >= 0) { $(["a-c", "a-oh", "a-hz", "a-p", "a-d"][bad]).reportValidity(); return; }
+  if (await addRow(vals.slice(0, 4), vals[4], "real", $("a-note").value.trim())) e.target.reset();
+});
+
+/* redraw charts on resize and theme change */
+let rzT = 0;
+const redraw = () => { clearTimeout(rzT); rzT = setTimeout(() => { drawHistory(); VARS.forEach((v, i) => drawPD(i)); }, 60); };
+new ResizeObserver(redraw).observe(document.querySelector(".wrap"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+
+buildSliders();
+renderAll();
+connect();
+})();
+</script>

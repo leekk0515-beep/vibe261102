@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { DEFAULT_CATEGORY, isCategory } from "@/lib/board";
 import * as db from "@/lib/db";
 
 export type FormState = {
-  errors?: Partial<Record<"title" | "content" | "author", string>>;
+  errors?: Partial<Record<"title" | "content" | "author" | "category", string>>;
   message?: string;
-  values?: { title?: string; content?: string; author?: string };
+  values?: { title?: string; content?: string; author?: string; category?: string };
   ok?: boolean;
 };
 
@@ -24,8 +25,10 @@ function validatePost(formData: FormData) {
     title: text(formData, "title"),
     content: text(formData, "content"),
     author: text(formData, "author"),
+    category: text(formData, "category") || DEFAULT_CATEGORY,
   };
   const errors: FormState["errors"] = {};
+  if (!isCategory(values.category)) errors.category = "카테고리를 선택해 주세요.";
   if (!values.title) errors.title = "제목을 입력해 주세요.";
   else if (values.title.length > LIMITS.title)
     errors.title = `제목은 ${LIMITS.title}자 이하로 입력해 주세요.`;
@@ -35,17 +38,18 @@ function validatePost(formData: FormData) {
   if (!values.author) errors.author = "작성자를 입력해 주세요.";
   else if (values.author.length > LIMITS.author)
     errors.author = `작성자는 ${LIMITS.author}자 이하로 입력해 주세요.`;
-  return { values, errors, valid: Object.keys(errors).length === 0 };
+  const valid = Object.keys(errors).length === 0;
+  return { values, errors, valid, input: values as db.PostInput };
 }
 
 export async function createPostAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const { values, errors, valid } = validatePost(formData);
+  const { values, errors, valid, input } = validatePost(formData);
   if (!valid) return { errors, values };
 
-  const post = await db.createPost(values);
+  const post = await db.createPost(input);
   revalidatePath("/");
   redirect(`/posts/${post.id}`);
 }
@@ -55,10 +59,10 @@ export async function updatePostAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const { values, errors, valid } = validatePost(formData);
+  const { values, errors, valid, input } = validatePost(formData);
   if (!valid) return { errors, values };
 
-  const post = await db.updatePost(id, values);
+  const post = await db.updatePost(id, input);
   if (!post) return { message: "게시글을 찾을 수 없습니다.", values };
   revalidatePath("/");
   revalidatePath(`/posts/${id}`);
@@ -100,4 +104,18 @@ export async function deleteCommentAction(postId: string, commentId: string) {
   await db.deleteComment(commentId);
   revalidatePath(`/posts/${postId}`);
   revalidatePath("/");
+}
+
+/** 상세 화면을 열 때 한 번 호출됩니다. 새 조회수를 돌려줍니다. */
+export async function recordViewAction(postId: string) {
+  const count = await db.incrementViews(postId);
+  if (count !== null) revalidatePath("/");
+  return count;
+}
+
+/** 좋아요(liked=true) 또는 좋아요 취소(liked=false). 새 좋아요 수를 돌려줍니다. */
+export async function setLikeAction(postId: string, liked: boolean) {
+  const count = await db.changeLikes(postId, liked === true ? 1 : -1);
+  if (count !== null) revalidatePath("/");
+  return count;
 }
