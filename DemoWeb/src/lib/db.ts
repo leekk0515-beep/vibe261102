@@ -2,6 +2,8 @@ import "server-only";
 
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
+import { DEFAULT_CATEGORY, type Category, type SortKey } from "@/lib/board";
+
 /**
  * Neon(PostgreSQL) 저장소.
  *
@@ -15,9 +17,14 @@ export type Post = {
   title: string;
   content: string;
   author: string;
+  category: Category;
+  viewCount: number;
+  likeCount: number;
   createdAt: string;
   updatedAt: string;
 };
+
+export type PostInput = Pick<Post, "title" | "content" | "author" | "category">;
 
 export type Comment = {
   id: string;
@@ -72,6 +79,12 @@ async function db() {
           updated_at timestamptz NOT NULL DEFAULT now()
         )`,
       q`CREATE INDEX IF NOT EXISTS posts_created_at_idx ON posts (created_at DESC)`,
+      // 카테고리·조회수·좋아요 (기존 테이블에도 열을 추가합니다)
+      q`ALTER TABLE posts
+          ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'free',
+          ADD COLUMN IF NOT EXISTS view_count integer NOT NULL DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS like_count integer NOT NULL DEFAULT 0`,
+      q`CREATE INDEX IF NOT EXISTS posts_category_idx ON posts (category, created_at DESC)`,
       q`CREATE TABLE IF NOT EXISTS comments (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           post_id uuid NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
@@ -80,8 +93,8 @@ async function db() {
           created_at timestamptz NOT NULL DEFAULT now()
         )`,
       q`CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments (post_id, created_at)`,
-      q`INSERT INTO posts (title, content, author, created_at, updated_at)
-        SELECT s.title, s.content, '관리자', now() - s.ago, now() - s.ago
+      q`INSERT INTO posts (title, content, author, category, created_at, updated_at)
+        SELECT s.title, s.content, '관리자', 'notice', now() - s.ago, now() - s.ago
         FROM (VALUES
           ('게시판에 오신 것을 환영합니다',
            E'Next.js App Router와 shadcn/ui로 만든 데모 게시판입니다.\\n\\n글을 작성하고, 수정하고, 삭제하고, 댓글을 남겨 보세요.',
@@ -115,6 +128,9 @@ function toPost(r: Row): Post {
     title: r.title as string,
     content: r.content as string,
     author: r.author as string,
+    category: (r.category as Category) ?? DEFAULT_CATEGORY,
+    viewCount: Number(r.view_count ?? 0),
+    likeCount: Number(r.like_count ?? 0),
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };
@@ -133,11 +149,15 @@ function toComment(r: Row): Comment {
 export async function listPosts({
   query = "",
   field = "all",
+  category = null,
+  sort = "latest",
   page = 1,
   pageSize = 10,
 }: {
   query?: string;
   field?: SearchField;
+  category?: Category | null;
+  sort?: SortKey;
   page?: number;
   pageSize?: number;
 }) {
@@ -149,7 +169,8 @@ export async function listPosts({
   const byContent = field !== "title";
   const where = q`(${term} = ''
     OR (${byTitle} AND title ILIKE ${pattern})
-    OR (${byContent} AND content ILIKE ${pattern}))`;
+    OR (${byContent} AND content ILIKE ${pattern}))
+    AND (${category}::text IS NULL OR category = ${category})`;
 
   const [{ count }] = (await q`SELECT count(*)::int AS count FROM posts WHERE ${where}`) as {
     count: number;
@@ -158,12 +179,22 @@ export async function listPosts({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const current = Math.min(Math.max(1, page), totalPages);
 
+  // 정렬 열은 매개변수로 넣을 수 없어 CASE로 고릅니다. 같은 값이면 최신순입니다.
   const rows = (await q`
-    SELECT p.*,
-      (SELECT count(*)::int FROM comments c WHERE c.post_id = p.id) AS comment_count
-    FROM posts p
-    WHERE ${where}
-    ORDER BY p.created_at DESC, p.id
+    SELECT * FROM (
+      SELECT p.*,
+        (SELECT count(*)::int FROM comments c WHERE c.post_id = p.id) AS comment_count
+      FROM posts p
+      WHERE ${where}
+    ) s
+    ORDER BY
+      CASE ${sort}
+        WHEN 'views' THEN s.view_count
+        WHEN 'likes' THEN s.like_count
+        WHEN 'comments' THEN s.comment_count
+        ELSE 0
+      END DESC,
+      s.created_at DESC, s.id
     LIMIT ${pageSize} OFFSET ${(current - 1) * pageSize}`) as Row[];
 
   const items: PostSummary[] = rows.map((r) => ({
@@ -185,28 +216,50 @@ export async function getPost(id: string) {
   return { post: toPost(posts[0]), comments: comments.map(toComment) };
 }
 
-export async function createPost(input: Pick<Post, "title" | "content" | "author">) {
+export async function createPost(input: PostInput) {
   const q = await db();
   const rows = (await q`
-    INSERT INTO posts (title, content, author)
-    VALUES (${input.title}, ${input.content}, ${input.author})
+    INSERT INTO posts (title, content, author, category)
+    VALUES (${input.title}, ${input.content}, ${input.author}, ${input.category})
     RETURNING *`) as Row[];
   return toPost(rows[0]);
 }
 
 export async function updatePost(
   id: string,
-  input: Pick<Post, "title" | "content" | "author">,
+  input: PostInput,
 ) {
   if (!UUID.test(id)) return null;
   const q = await db();
   const rows = (await q`
     UPDATE posts
     SET title = ${input.title}, content = ${input.content},
-        author = ${input.author}, updated_at = now()
+        author = ${input.author}, category = ${input.category}, updated_at = now()
     WHERE id = ${id}
     RETURNING *`) as Row[];
   return rows[0] ? toPost(rows[0]) : null;
+}
+
+/** 조회수를 1 올리고 새 값을 돌려줍니다. 수정 시각(updated_at)은 바꾸지 않습니다. */
+export async function incrementViews(id: string) {
+  if (!UUID.test(id)) return null;
+  const q = await db();
+  const rows = (await q`
+    UPDATE posts SET view_count = view_count + 1
+    WHERE id = ${id}
+    RETURNING view_count`) as Row[];
+  return rows[0] ? Number(rows[0].view_count) : null;
+}
+
+/** 좋아요를 1 더하거나(+1) 뺍니다(-1). 0 아래로는 내려가지 않습니다. */
+export async function changeLikes(id: string, delta: 1 | -1) {
+  if (!UUID.test(id)) return null;
+  const q = await db();
+  const rows = (await q`
+    UPDATE posts SET like_count = GREATEST(0, like_count + ${delta})
+    WHERE id = ${id}
+    RETURNING like_count`) as Row[];
+  return rows[0] ? Number(rows[0].like_count) : null;
 }
 
 /** 댓글은 외래 키의 ON DELETE CASCADE로 함께 삭제됩니다. */

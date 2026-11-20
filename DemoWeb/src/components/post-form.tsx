@@ -16,13 +16,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CATEGORIES, DEFAULT_CATEGORY } from "@/lib/board";
 
 type Props = {
   heading: string;
   submitLabel: string;
   cancelHref: string;
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
-  defaultValues?: { title: string; content: string; author: string };
+  defaultValues?: { title: string; content: string; author: string; category: string };
 };
 
 export function PostForm({
@@ -65,6 +66,28 @@ export function PostForm({
             {errors.title && (
               <p id={id("title-error")} className="text-sm text-destructive">
                 {errors.title}
+              </p>
+            )}
+          </div>
+          <div className="grid gap-2 sm:max-w-xs">
+            <Label htmlFor={id("category")}>카테고리</Label>
+            <select
+              id={id("category")}
+              name="category"
+              defaultValue={values.category ?? DEFAULT_CATEGORY}
+              aria-invalid={!!errors.category}
+              aria-describedby={errors.category ? id("category-error") : undefined}
+              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30 [&>option]:bg-popover [&>option]:text-popover-foreground"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            {errors.category && (
+              <p id={id("category-error")} className="text-sm text-destructive">
+                {errors.category}
               </p>
             )}
           </div>

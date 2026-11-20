@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { MessageSquareIcon, SearchIcon } from "lucide-react";
+import { HeartIcon, MessageSquareIcon, SearchIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,8 +29,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  CATEGORIES,
+  categoryLabel,
+  isCategory,
+  isSortKey,
+  SORTS,
+  type Category,
+  type SortKey,
+} from "@/lib/board";
 import { listPosts, type SearchField } from "@/lib/db";
 import { formatDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const FIELDS: { value: SearchField; label: string }[] = [
   { value: "all", label: "제목+내용" },
@@ -50,8 +60,26 @@ function parseParams(sp: Awaited<SearchParams>) {
   const field: SearchField = FIELDS.some((f) => f.value === rawField)
     ? (rawField as SearchField)
     : "all";
+  const rawCategory = first(sp.category);
+  const category: Category | null = isCategory(rawCategory) ? rawCategory : null;
+  const rawSort = first(sp.sort);
+  const sort: SortKey = isSortKey(rawSort) ? rawSort : "latest";
   const page = Number.parseInt(first(sp.page) ?? "1", 10);
-  return { q, field, page: Number.isFinite(page) && page > 0 ? page : 1 };
+  return { q, field, category, sort, page: Number.isFinite(page) && page > 0 ? page : 1 };
+}
+
+type ListParams = Omit<ReturnType<typeof parseParams>, "page"> & { page?: number };
+
+/** 기본값은 주소에서 빼서 짧게 유지합니다. */
+function listHref({ q, field, category, sort, page = 1 }: ListParams) {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  if (q) params.set("q", q);
+  if (q && field !== "all") params.set("field", field);
+  if (sort !== "latest") params.set("sort", sort);
+  if (page > 1) params.set("page", String(page));
+  const s = params.toString();
+  return s ? `/?${s}` : "/";
 }
 
 export default function Home({ searchParams }: { searchParams: SearchParams }) {
@@ -71,39 +99,54 @@ export default function Home({ searchParams }: { searchParams: SearchParams }) {
 }
 
 async function PostList({ searchParams }: { searchParams: SearchParams }) {
-  const { q, field, page } = parseParams(await searchParams);
-  const result = await listPosts({ query: q, field, page });
+  const params = parseParams(await searchParams);
+  const { q, field, category, sort, page } = params;
+  const result = await listPosts({ query: q, field, category, sort, page });
 
-  const hrefFor = (p: number) => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (q && field !== "all") params.set("field", field);
-    if (p > 1) params.set("page", String(p));
-    const s = params.toString();
-    return s ? `/?${s}` : "/";
-  };
+  const hrefFor = (p: number) => listHref({ ...params, page: p });
 
   return (
     <>
-      <SearchForm q={q} field={field} />
+      <CategoryTabs params={params} />
 
-      <p className="text-sm text-muted-foreground">
-        {q ? (
-          <>
-            <span className="font-medium text-foreground">‘{q}’</span> 검색 결과{" "}
-            {result.total}건
-          </>
-        ) : (
-          <>전체 {result.total}건</>
-        )}
-      </p>
+      <SearchForm q={q} field={field} category={category} sort={sort} />
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <p className="text-muted-foreground">
+          {q ? (
+            <>
+              <span className="font-medium text-foreground">‘{q}’</span> 검색 결과{" "}
+              {result.total}건
+            </>
+          ) : (
+            <>
+              {category ? categoryLabel(category) : "전체"} {result.total}건
+            </>
+          )}
+        </p>
+        <nav aria-label="정렬" className="flex flex-wrap gap-x-3 gap-y-1">
+          {SORTS.map((s) => (
+            <Link
+              key={s.value}
+              href={listHref({ ...params, sort: s.value })}
+              aria-current={s.value === sort ? "true" : undefined}
+              className={cn(
+                "text-muted-foreground hover:text-foreground",
+                s.value === sort && "font-semibold text-foreground",
+              )}
+            >
+              {s.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
 
       {result.items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
           {q ? "검색 결과가 없습니다." : "아직 게시글이 없습니다. 첫 글을 작성해 보세요!"}
           {q ? (
             <Button variant="outline" size="sm" asChild>
-              <Link href="/">전체 목록 보기</Link>
+              <Link href={listHref({ ...params, q: "", page: 1 })}>검색 지우기</Link>
             </Button>
           ) : (
             <Button size="sm" asChild>
@@ -119,6 +162,8 @@ async function PostList({ searchParams }: { searchParams: SearchParams }) {
               <TableHead>제목</TableHead>
               <TableHead className="hidden w-28 md:table-cell">작성자</TableHead>
               <TableHead className="hidden w-28 text-right sm:table-cell">작성일</TableHead>
+              <TableHead className="hidden w-16 text-right md:table-cell">조회</TableHead>
+              <TableHead className="hidden w-16 text-right md:table-cell">좋아요</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -134,6 +179,12 @@ async function PostList({ searchParams }: { searchParams: SearchParams }) {
                       href={`/posts/${post.id}`}
                       className="flex items-center gap-2 font-medium hover:underline"
                     >
+                      <Badge
+                        variant={post.category === "notice" ? "default" : "outline"}
+                        className="shrink-0"
+                      >
+                        {categoryLabel(post.category)}
+                      </Badge>
                       <span className="truncate">{post.title}</span>
                       {post.commentCount > 0 && (
                         <Badge variant="secondary" className="shrink-0 gap-1">
@@ -142,14 +193,25 @@ async function PostList({ searchParams }: { searchParams: SearchParams }) {
                         </Badge>
                       )}
                     </Link>
-                    <p className="mt-1 text-xs text-muted-foreground md:hidden">
+                    <p className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground md:hidden">
                       {post.author}
                       <span className="sm:hidden"> · {formatDate(post.createdAt)}</span>
+                      <span> · 조회 {post.viewCount.toLocaleString()}</span>
+                      <span className="inline-flex items-center gap-0.5">
+                        · <HeartIcon className="size-3" aria-label="좋아요" />
+                        {post.likeCount.toLocaleString()}
+                      </span>
                     </p>
                   </TableCell>
                   <TableCell className="hidden truncate md:table-cell">{post.author}</TableCell>
                   <TableCell className="hidden text-right text-muted-foreground sm:table-cell">
                     {formatDate(post.createdAt)}
+                  </TableCell>
+                  <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
+                    {post.viewCount.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
+                    {post.likeCount.toLocaleString()}
                   </TableCell>
                 </TableRow>
               );
@@ -165,9 +227,42 @@ async function PostList({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
-function SearchForm({ q, field }: { q: string; field: SearchField }) {
+function CategoryTabs({ params }: { params: ListParams }) {
+  const tabs = [{ value: null, label: "전체" }, ...CATEGORIES];
+  return (
+    <nav aria-label="카테고리" className="flex flex-wrap gap-1">
+      {tabs.map((t) => {
+        const active = t.value === params.category;
+        return (
+          <Button key={t.label} variant={active ? "default" : "ghost"} size="sm" asChild>
+            <Link
+              href={listHref({ ...params, category: t.value, page: 1 })}
+              aria-current={active ? "page" : undefined}
+            >
+              {t.label}
+            </Link>
+          </Button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function SearchForm({
+  q,
+  field,
+  category,
+  sort,
+}: {
+  q: string;
+  field: SearchField;
+  category: Category | null;
+  sort: SortKey;
+}) {
   return (
     <form action="/" className="flex flex-col gap-2 sm:flex-row" role="search">
+      {category && <input type="hidden" name="category" value={category} />}
+      {sort !== "latest" && <input type="hidden" name="sort" value={sort} />}
       <select
         name="field"
         defaultValue={field}
